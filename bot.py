@@ -2,6 +2,8 @@ from pyrogram import Client, filters
 import os
 import yt_dlp
 import re
+import aiohttp
+import urllib.parse
 
 API_ID = 21123122
 API_HASH = 'a4d997c1f7c46a88908a2ee7b7113eab'
@@ -18,16 +20,49 @@ def clean_filename(name):
 async def help_handler(_, message):
     await message.reply(
         "ℹ️ <b>Foydalanish qo‘llanmasi</b>\n\n"
+        "<b>🎵 MP3 yuklab olish:</b>\n"
         "1. YouTube havolasini yuboring (masalan: https://youtu.be/abc123)\n"
         "2. Bot MP3 formatga aylantiradi\n"
         "3. Sizga audio faylni yuboradi\n\n"
+        "<b>🖼 Rasm yaratish:</b>\n"
+        "/rasm &lt;matn&gt; — matn asosida AI yordamida rasm yaratadi\n"
+        "Misol: /rasm quyoshli dengiz manzarasi\n\n"
         "🛠 Yuklanmagan bo‘lsa, video bloklangan yoki fayl hajmi juda katta bo‘lishi mumkin.",
         parse_mode="html"
     )
 
 @bot.on_message(filters.command("start"))
 async def start_handler(_, message):
-    await message.reply("👋 Salom! YouTube videoni MP3 formatga aylantirish uchun link yuboring.")
+    await message.reply(
+        "👋 Salom! Quyidagi buyruqlardan foydalanishingiz mumkin:\n\n"
+        "🎵 YouTube havolasini yuboring — MP3 yuklab olish uchun\n"
+        "🖼 /rasm <matn> — matn asosida rasm yaratish"
+    )
+
+
+@bot.on_message(filters.command("rasm"))
+async def image_generator(_, message):
+    prompt = " ".join(message.command[1:]).strip()
+    if not prompt:
+        return await message.reply("❌ Iltimos, rasm uchun matn kiriting.\nMisol: /rasm tog'li manzara")
+
+    msg = await message.reply("🎨 Rasm tayyorlanmoqda, kuting...")
+
+    try:
+        encoded_prompt = urllib.parse.quote(prompt)
+        url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=512&height=512&nologo=true"
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=60)) as resp:
+                if resp.status != 200:
+                    return await msg.edit(f"❌ Rasm yaratishda xatolik yuz berdi (HTTP {resp.status}). Qayta urinib ko'ring.")
+                image_bytes = await resp.read()
+
+        await msg.delete()
+        await message.reply_photo(photo=image_bytes, caption=f"🖼 {prompt}")
+
+    except Exception:
+        await msg.edit("❌ Rasm yaratishda kutilmagan xatolik yuz berdi. Iltimos, qayta urinib ko'ring.")
 
 @bot.on_message(filters.private & filters.text)
 async def mp3_downloader(_, message):
